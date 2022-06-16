@@ -28,7 +28,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://kzzgtepmihknds:032e659278e70aeeba6bc9ae8d4a22e6257ca5ce85feb9a5bf8c18f2a683087e@ec2-44-196-174-238.compute-1.amazonaws.com:5432/da3ak0ru9lfrn1'
 
-
+picks_path = "usopen-player-selections_v2.csv"
 # New MySQL DB
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://username:password@localhost/db_name'
 #app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:password123@localhost/our_users'
@@ -134,7 +134,7 @@ def pool_standings():
 	Dict={title:column for (title,column) in col}
 	df=pd.DataFrame(Dict)
 
-	df_picks = pd.read_csv(r"C:\Users\Zacharie\Desktop\Programming\masters-stats\usopen-player-selections_v2.csv")
+	df_picks = pd.read_csv(picks_path)
 	df_final = df_picks.merge(df,on='PLAYER',how='left')
 	df_final['TOT'].replace('--',999,inplace=True)
 	df_final.dropna(inplace=True)
@@ -185,7 +185,7 @@ def pool_raw_data():
 	Dict={title:column for (title,column) in col}
 	df=pd.DataFrame(Dict)
 
-	df_picks = pd.read_csv(r"C:\Users\Zacharie\Desktop\Programming\masters-stats\usopen-player-selections_v2.csv")
+	df_picks = pd.read_csv(picks_path)
 	df_final = df_picks.merge(df,on='PLAYER',how='left')
 	return render_template("pool.html",df_final=df_final)
 
@@ -270,7 +270,7 @@ def index():
 	Dict={title:column for (title,column) in col}
 	df=pd.DataFrame(Dict)
 
-	df_picks = pd.read_csv(r"C:\Users\Zacharie\Desktop\Programming\masters-stats\usopen-player-selections_v2.csv")
+	df_picks = pd.read_csv(picks_path)
 	df_final = df_picks.merge(df,on='PLAYER',how='left')
 	df_final['TOT'].replace('--',999,inplace=True)
 	df_final.dropna(inplace=True)
