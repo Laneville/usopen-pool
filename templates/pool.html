@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h2>Pool Player Selection</h2>
+<h4>Raw Data</h4>
+<br/>
+<table class="table table-hover table-bordered table-striped">
+	<tr>
+		<th>Pool Team Name</th>
+		<th>Player</th>
+		<th>Position</th>
+		<th>Score</th>
+		<th>Today</th>
+		<th>Thru</th>
+		<th>R1</th>
+		<th>R2</th>
+		<th>R3</th>
+		<th>R4</th>
+		<th>Total</th>
+	</tr>
+	{% for index,row in df_final.iterrows() %}
+		<tr>
+		<td>{{ row['Team Name'] }}</td>
+		<td>{{ row['PLAYER']}}</td>
+		<td>{{ row['POS']}}</td>
+		<td>{{ row['SCORE']}}</td>
+		<td>{{ row['TODAY']}}</td>
+		<td>{{ row['THRU']}}</td>
+		<td>{{ row['R1']}}</td>
+		<td>{{ row['R2']}}</td>
+		<td>{{ row['R3']}}</td>
+		<td>{{ row['R4']}}</td>
+		<td>{{ row['TOT']}}</td>
+		</tr>
+	{% endfor %}
+
+</table>
+
+
+
+
+
+{% endblock %}

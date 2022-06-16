@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<h2>US Open Players Leaderboard</h2>
+<h4>Source: ESPN.com</h4>
+<br/>
+<table class="table table-hover table-bordered table-striped">
+	<tr>
+		<th>Position</th>
+		<th>Player</th>
+		<th>Score</th>
+		<th>Today</th>
+		<th>Thru</th>
+		<th>R1</th>
+		<th>R2</th>
+		<th>R3</th>
+		<th>R4</th>
+		<th>Total</th>
+	</tr>
+	{% for index,row in df.iterrows() %}
+		<tr>
+		<td>{{ row['POS'] }}</td>
+		<td>{{ row['PLAYER']}}</td>
+		<td>{{ row['SCORE']}}</td>
+		<td>{{ row['TODAY']}}</td>
+		<td>{{ row['THRU']}}</td>
+		<td>{{ row['R1']}}</td>
+		<td>{{ row['R2']}}</td>
+		<td>{{ row['R3']}}</td>
+		<td>{{ row['R4']}}</td>
+		<td>{{ row['TOT']}}</td>
+		</tr>
+	{% endfor %}
+
+</table>
+
+
+
+
+
+{% endblock %}

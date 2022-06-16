@@ -11,7 +11,11 @@ from flask_ckeditor import CKEditor
 from werkzeug.utils import secure_filename
 import uuid as uuid
 import os
-
+import pandas as pd
+import numpy as np
+import requests
+from bs4 import BeautifulSoup
+import lxml.html as lh
 
 # Create a Flask Instance
 app = Flask(__name__)
@@ -19,10 +23,10 @@ app = Flask(__name__)
 ckeditor = CKEditor(app)
 # Add Database
 # Old SQLite DB
-#app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 # app.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://fvmdxyjigwbmiu:d31d36c7613e08f7ad37a6e40007189d7f2f44fbc99234b339994780a122d870@ec2-3-214-190-189.compute-1.amazonaws.com:5432/d17b5scj97ckqe'
 
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://kzzgtepmihknds:032e659278e70aeeba6bc9ae8d4a22e6257ca5ce85feb9a5bf8c18f2a683087e@ec2-44-196-174-238.compute-1.amazonaws.com:5432/da3ak0ru9lfrn1'
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'postgres://kzzgtepmihknds:032e659278e70aeeba6bc9ae8d4a22e6257ca5ce85feb9a5bf8c18f2a683087e@ec2-44-196-174-238.compute-1.amazonaws.com:5432/da3ak0ru9lfrn1'
 
 
 # New MySQL DB
@@ -37,6 +41,13 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+
+
+def cleanup(row):
+    if row['POS'][:1] == 'T':
+        return row['POS'][1:]
+    else:
+        return row['POS'][:]
 
 # Flask_Login Stuff
 login_manager = LoginManager()
@@ -82,325 +93,192 @@ def search():
 		 form=form,
 		 searched = post.searched,
 		 posts = posts)
-# Create Login Page
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-	form = LoginForm()
-	if form.validate_on_submit():
-		user = Users.query.filter_by(username=form.username.data).first()
-		if user:
-			# Check the hash
-			if check_password_hash(user.password_hash, form.password.data):
-				login_user(user)
-				flash("Login Succesfull!!")
-				return redirect(url_for('dashboard'))
-			else:
-				flash("Wrong Password - Try Again!")
-		else:
-			flash("That User Doesn't Exist! Try Again...")
 
 
-	return render_template('login.html', form=form)
+@app.route('/pool_standings')
+def pool_standings():
+	url="http://www.espn.com/golf/leaderboard"
+	page = requests.get(url)
+	doc = lh.fromstring(page.content)
+	tr_elements = doc.xpath('//tr')
+	#Create empty list
+	col=[]
+	i=0
+	#For each row, store each first element (header) and an empty list
+	for t in tr_elements[0]:
+		i+=1
+		name=t.text_content()
+		col.append((name,[]))
+	
+	#Since out first row is the header, data is stored on the second row onwards
+	for j in range(1,len(tr_elements)):
+		#T is our j'th row
+		T=tr_elements[j]
+		#i is the index of our column
+		i=0
+		#Iterate through each element of the row
+		for t in T.iterchildren():
+			data=t.text_content() 
+			#Check if row is empty
+			if i>0:
+			#Convert any numerical value to integers
+				try:
+					data=int(data)
+				except:
+					pass
+			#Append the data to the empty list of the i'th column
+			col[i][1].append(data)
+			#Increment i for the next column
+			i+=1
+	
+	Dict={title:column for (title,column) in col}
+	df=pd.DataFrame(Dict)
 
-# Create Logout Page
-@app.route('/logout', methods=['GET', 'POST'])
-@login_required
-def logout():
-	logout_user()
-	flash("You Have Been Logged Out!  Thanks For Stopping By...")
-	return redirect(url_for('login'))
+	df_picks = pd.read_csv(r"C:\Users\Zacharie\Desktop\Programming\masters-stats\usopen-player-selections_v2.csv")
+	df_final = df_picks.merge(df,on='PLAYER',how='left')
+	df_final['TOT'].replace('--',999,inplace=True)
+	df_final.dropna(inplace=True)
+	df_final_two = df_final.groupby('Team Name')['TOT'].sum().reset_index().sort_values(by='TOT',ascending=True)
+	df_final_two['Position'] = df_final_two['TOT'].rank(method='min')
+	df_final_two.sort_values(by='Position',inplace=True)
 
-# Create Dashboard Page
-@app.route('/dashboard', methods=['GET', 'POST'])
-@login_required
-def dashboard():
-	form = UserForm()
-	id = current_user.id
-	name_to_update = Users.query.get_or_404(id)
-	if request.method == "POST":
-		name_to_update.name = request.form['name']
-		name_to_update.email = request.form['email']
-		name_to_update.favorite_color = request.form['favorite_color']
-		name_to_update.username = request.form['username']
-		name_to_update.about_author = request.form['about_author']
-		
-
-		# Check for profile pic
-		if request.files['profile_pic']:
-			name_to_update.profile_pic = request.files['profile_pic']
-
-			# Grab Image Name
-			pic_filename = secure_filename(name_to_update.profile_pic.filename)
-			# Set UUID
-			pic_name = str(uuid.uuid1()) + "_" + pic_filename
-			# Save That Image
-			saver = request.files['profile_pic']
-			
-
-			# Change it to a string to save to db
-			name_to_update.profile_pic = pic_name
-			try:
-				db.session.commit()
-				saver.save(os.path.join(app.config['UPLOAD_FOLDER'], pic_name))
-				flash("User Updated Successfully!")
-				return render_template("dashboard.html", 
-					form=form,
-					name_to_update = name_to_update)
-			except:
-				flash("Error!  Looks like there was a problem...try again!")
-				return render_template("dashboard.html", 
-					form=form,
-					name_to_update = name_to_update)
-		else:
-			db.session.commit()
-			flash("User Updated Successfully!")
-			return render_template("dashboard.html", 
-				form=form, 
-				name_to_update = name_to_update)
-	else:
-		return render_template("dashboard.html", 
-				form=form,
-				name_to_update = name_to_update,
-				id = id)
-
-	return render_template('dashboard.html')
+	return render_template("pool-standings.html",df_final=df_final_two)
 
 
 
+@app.route('/pool_raw_data')
+def pool_raw_data():
+	url="http://www.espn.com/golf/leaderboard"
+	page = requests.get(url)
+	doc = lh.fromstring(page.content)
+	tr_elements = doc.xpath('//tr')
+	#Create empty list
+	col=[]
+	i=0
+	#For each row, store each first element (header) and an empty list
+	for t in tr_elements[0]:
+		i+=1
+		name=t.text_content()
+		col.append((name,[]))
+	
+	#Since out first row is the header, data is stored on the second row onwards
+	for j in range(1,len(tr_elements)):
+		#T is our j'th row
+		T=tr_elements[j]
+		#i is the index of our column
+		i=0
+		#Iterate through each element of the row
+		for t in T.iterchildren():
+			data=t.text_content() 
+			#Check if row is empty
+			if i>0:
+			#Convert any numerical value to integers
+				try:
+					data=int(data)
+				except:
+					pass
+			#Append the data to the empty list of the i'th column
+			col[i][1].append(data)
+			#Increment i for the next column
+			i+=1
+	
+	Dict={title:column for (title,column) in col}
+	df=pd.DataFrame(Dict)
 
+	df_picks = pd.read_csv(r"C:\Users\Zacharie\Desktop\Programming\masters-stats\usopen-player-selections_v2.csv")
+	df_final = df_picks.merge(df,on='PLAYER',how='left')
+	return render_template("pool.html",df_final=df_final)
 
-
-@app.route('/posts/delete/<int:id>')
-@login_required
-def delete_post(id):
-	post_to_delete = Posts.query.get_or_404(id)
-	id = current_user.id
-	if id == post_to_delete.poster.id or id == 14:
-		try:
-			db.session.delete(post_to_delete)
-			db.session.commit()
-
-			# Return a message
-			flash("Blog Post Was Deleted!")
-
-			# Grab all the posts from the database
-			posts = Posts.query.order_by(Posts.date_posted)
-			return render_template("posts.html", posts=posts)
-
-
-		except:
-			# Return an error message
-			flash("Whoops! There was a problem deleting post, try again...")
-
-			# Grab all the posts from the database
-			posts = Posts.query.order_by(Posts.date_posted)
-			return render_template("posts.html", posts=posts)
-	else:
-		# Return a message
-		flash("You Aren't Authorized To Delete That Post!")
-
-		# Grab all the posts from the database
-		posts = Posts.query.order_by(Posts.date_posted)
-		return render_template("posts.html", posts=posts)
 
 @app.route('/posts')
 def posts():
-	# Grab all the posts from the database
-	posts = Posts.query.order_by(Posts.date_posted)
-	return render_template("posts.html", posts=posts)
-
-@app.route('/posts/<int:id>')
-def post(id):
-	post = Posts.query.get_or_404(id)
-	return render_template('post.html', post=post)
-
-@app.route('/posts/edit/<int:id>', methods=['GET', 'POST'])
-@login_required
-def edit_post(id):
-	post = Posts.query.get_or_404(id)
-	form = PostForm()
-	if form.validate_on_submit():
-		post.title = form.title.data
-		#post.author = form.author.data
-		post.slug = form.slug.data
-		post.content = form.content.data
-		# Update Database
-		db.session.add(post)
-		db.session.commit()
-		flash("Post Has Been Updated!")
-		return redirect(url_for('post', id=post.id))
+	url="http://www.espn.com/golf/leaderboard"
+	page = requests.get(url)
+	doc = lh.fromstring(page.content)
+	tr_elements = doc.xpath('//tr')
+	#Create empty list
+	col=[]
+	i=0
+	#For each row, store each first element (header) and an empty list
+	for t in tr_elements[0]:
+		i+=1
+		name=t.text_content()
+		col.append((name,[]))
 	
-	if current_user.id == post.poster_id or current_user.id == 14:
-		form.title.data = post.title
-		#form.author.data = post.author
-		form.slug.data = post.slug
-		form.content.data = post.content
-		return render_template('edit_post.html', form=form)
-	else:
-		flash("You Aren't Authorized To Edit This Post...")
-		posts = Posts.query.order_by(Posts.date_posted)
-		return render_template("posts.html", posts=posts)
-
-
-
-# Add Post Page
-@app.route('/add-post', methods=['GET', 'POST'])
-#@login_required
-def add_post():
-	form = PostForm()
-
-	if form.validate_on_submit():
-		poster = current_user.id
-		post = Posts(title=form.title.data, content=form.content.data, poster_id=poster, slug=form.slug.data)
-		# Clear The Form
-		form.title.data = ''
-		form.content.data = ''
-		#form.author.data = ''
-		form.slug.data = ''
-
-		# Add post data to database
-		db.session.add(post)
-		db.session.commit()
-
-		# Return a Message
-		flash("Blog Post Submitted Successfully!")
-
-	# Redirect to the webpage
-	return render_template("add_post.html", form=form)
-
-
-
-# Json Thing
-@app.route('/date')
-def get_current_date():
-	favorite_pizza = {
-		"John": "Pepperoni",
-		"Mary": "Cheese",
-		"Tim": "Mushroom"
-	}
-	return favorite_pizza
-	#return {"Date": date.today()}
-
-
-
-
-
-
-@app.route('/delete/<int:id>')
-@login_required
-def delete(id):
-	# Check logged in id vs. id to delete
-	if id == current_user.id:
-		user_to_delete = Users.query.get_or_404(id)
-		name = None
-		form = UserForm()
-
-		try:
-			db.session.delete(user_to_delete)
-			db.session.commit()
-			flash("User Deleted Successfully!!")
-
-			our_users = Users.query.order_by(Users.date_added)
-			return render_template("add_user.html", 
-			form=form,
-			name=name,
-			our_users=our_users)
-
-		except:
-			flash("Whoops! There was a problem deleting user, try again...")
-			return render_template("add_user.html", 
-			form=form, name=name,our_users=our_users)
-	else:
-		flash("Sorry, you can't delete that user! ")
-		return redirect(url_for('dashboard'))
-
-# Update Database Record
-@app.route('/update/<int:id>', methods=['GET', 'POST'])
-@login_required
-def update(id):
-	form = UserForm()
-	name_to_update = Users.query.get_or_404(id)
-	if request.method == "POST":
-		name_to_update.name = request.form['name']
-		name_to_update.email = request.form['email']
-		name_to_update.favorite_color = request.form['favorite_color']
-		name_to_update.username = request.form['username']
-		try:
-			db.session.commit()
-			flash("User Updated Successfully!")
-			return render_template("update.html", 
-				form=form,
-				name_to_update = name_to_update, id=id)
-		except:
-			flash("Error!  Looks like there was a problem...try again!")
-			return render_template("update.html", 
-				form=form,
-				name_to_update = name_to_update,
-				id=id)
-	else:
-		return render_template("update.html", 
-				form=form,
-				name_to_update = name_to_update,
-				id = id)
-
-
-
-#def index():
-#	return "<h1>Hello World!</h1>"
-
-# FILTERS!!!
-#safe
-#capitalize
-#lower
-#upper
-#title
-#trim
-#striptags
-
-
-@app.route('/user/add', methods=['GET', 'POST'])
-def add_user():
-	name = None
-	form = UserForm()
-	if form.validate_on_submit():
-		user = Users.query.filter_by(email=form.email.data).first()
-		if user is None:
-			# Hash the password!!!
-			hashed_pw = generate_password_hash(form.password_hash.data, "sha256")
-			user = Users(username=form.username.data, name=form.name.data, email=form.email.data, favorite_color=form.favorite_color.data, password_hash=hashed_pw)
-			db.session.add(user)
-			db.session.commit()
-		name = form.name.data
-		form.name.data = ''
-		form.username.data = ''
-		form.email.data = ''
-		form.favorite_color.data = ''
-		form.password_hash.data = ''
-
-		flash("User Added Successfully!")
-	our_users = Users.query.order_by(Users.date_added)
-	return render_template("add_user.html", 
-		form=form,
-		name=name,
-		our_users=our_users)
+	#Since out first row is the header, data is stored on the second row onwards
+	for j in range(1,len(tr_elements)):
+		#T is our j'th row
+		T=tr_elements[j]
+		#i is the index of our column
+		i=0
+		#Iterate through each element of the row
+		for t in T.iterchildren():
+			data=t.text_content() 
+			#Check if row is empty
+			if i>0:
+			#Convert any numerical value to integers
+				try:
+					data=int(data)
+				except:
+					pass
+			#Append the data to the empty list of the i'th column
+			col[i][1].append(data)
+			#Increment i for the next column
+			i+=1
+	
+	Dict={title:column for (title,column) in col}
+	df=pd.DataFrame(Dict)
+	return render_template("players-selected.html",df=df)
 
 # Create a route decorator
 @app.route('/')
 def index():
-	first_name = "John"
-	stuff = "This is bold text"
+	url="http://www.espn.com/golf/leaderboard"
+	page = requests.get(url)
+	doc = lh.fromstring(page.content)
+	tr_elements = doc.xpath('//tr')
+	#Create empty list
+	col=[]
+	i=0
+	#For each row, store each first element (header) and an empty list
+	for t in tr_elements[0]:
+		i+=1
+		name=t.text_content()
+		col.append((name,[]))
+	
+	#Since out first row is the header, data is stored on the second row onwards
+	for j in range(1,len(tr_elements)):
+		#T is our j'th row
+		T=tr_elements[j]
+		#i is the index of our column
+		i=0
+		#Iterate through each element of the row
+		for t in T.iterchildren():
+			data=t.text_content() 
+			#Check if row is empty
+			if i>0:
+			#Convert any numerical value to integers
+				try:
+					data=int(data)
+				except:
+					pass
+			#Append the data to the empty list of the i'th column
+			col[i][1].append(data)
+			#Increment i for the next column
+			i+=1
+	
+	Dict={title:column for (title,column) in col}
+	df=pd.DataFrame(Dict)
 
-	favorite_pizza = ["Pepperoni", "Cheese", "Mushrooms", 41]
-	return render_template("index.html", 
-		first_name=first_name,
-		stuff=stuff,
-		favorite_pizza = favorite_pizza)
+	df_picks = pd.read_csv(r"C:\Users\Zacharie\Desktop\Programming\masters-stats\usopen-player-selections_v2.csv")
+	df_final = df_picks.merge(df,on='PLAYER',how='left')
+	df_final['TOT'].replace('--',999,inplace=True)
+	df_final.dropna(inplace=True)
+	df_final_two = df_final.groupby('Team Name')['TOT'].sum().reset_index().sort_values(by='TOT',ascending=True)
+	df_final_two['Position'] = df_final_two['TOT'].rank(method='min')
+	df_final_two.sort_values(by='Position',inplace=True)
+	return render_template("pool-standings.html", df_final=df_final_two)
 
-# localhost:5000/user/John
-@app.route('/user/<name>')
-
-def user(name):
-	return render_template("user.html", user_name=name)
 
 # Create Custom Error Pages
 
