@@ -143,7 +143,7 @@ def pool_standings():
 	df_final_two = df_final.groupby('Team Name')['TOT'].sum().reset_index().sort_values(by='TOT',ascending=True)
 	df_final_two['Position'] = df_final_two['TOT'].rank(method='min')
 	df_final_two.sort_values(by='Position',inplace=True)
-	df_final_two['Final Score'] = df_final_two['Total'] - (6*70)
+	df_final_two['Final Score'] = df_final_two['TOT'] - (6*70)
 
 	return render_template("pool-standings.html",df_final=df_final_two)
 
@@ -282,7 +282,7 @@ def index():
 	df_final_two = df_final.groupby('Team Name')['TOT'].sum().reset_index().sort_values(by='TOT',ascending=True)
 	df_final_two['Position'] = df_final_two['TOT'].rank(method='min')
 	df_final_two.sort_values(by='Position',inplace=True)
-	df_final_two['Final Score'] = df_final_two['Total'] - (6*70)
+	df_final_two['Final Score'] = df_final_two['TOT'] - (6*70)
 	return render_template("pool-standings.html", df_final=df_final_two)
 
 
