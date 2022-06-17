@@ -10,12 +10,14 @@
 		<th>Position</th>
 		<th>Team Name</th>
 		<th>Total</th>
+		<th>Final Score</th>
 	</tr>
 	{% for index,row in df_final.iterrows() %}
 		<tr>
 		<td>{{ row['Position'] }}</td>
 		<td>{{ row['Team Name'] }}</td>
 		<td>{{ row['TOT']}}</td>
+		<td>{{ row['Final Score']}}</td>
 		</tr>
 	{% endfor %}
 
