@@ -6,12 +6,14 @@
 <h4>Combined final scores (top 6 scores out of 7 golfers)</h4>
 <br/>
 <table class="table table-hover table-bordered table-striped">
-	<tr>
-		<th>Position</th>
-		<th>Team Name</th>
-		<th>Total</th>
-		<th>Final Score</th>
-	</tr>
+	<thead class="thead-dark">
+		<tr>
+			<th>Position</th>
+			<th>Team Name</th>
+			<th>Total</th>
+			<th>Final Score</th>
+		</tr>
+	</thead>
 	{% for index,row in df_final.iterrows() %}
 		<tr>
 		<td>{{ row['Position'] }}</td>

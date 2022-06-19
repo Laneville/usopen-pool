@@ -16,6 +16,7 @@ import numpy as np
 import requests
 from bs4 import BeautifulSoup
 import lxml.html as lh
+from datetime import datetime
 
 # Create a Flask Instance
 app = Flask(__name__)
@@ -42,6 +43,25 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
+COURSE_PAR = 70
+TOTAL_GOLFERS_SCORED = 6
+
+def round_tracker():
+	today = datetime.today().isoweekday()
+	if today == 4:
+		return COURSE_PAR
+	elif today == 5:
+		return COURSE_PAR * 2
+	elif today == 6:
+		return COURSE_PAR * 3
+	else:
+		return COURSE_PAR * 4
+
+def cut_detection(row):
+    if row['SCORE'] == 'CUT':
+        return 
+    else:
+        return row['TOT']
 
 def cleanup(row):
     if row['POS'][:1] == 'T':
@@ -133,17 +153,19 @@ def pool_standings():
 	
 	Dict={title:column for (title,column) in col}
 	df=pd.DataFrame(Dict)
-
+	max_score = df['TOT'].max()
 	df_picks = pd.read_csv(picks_path)
 	df_final = df_picks.merge(df,on='PLAYER',how='left')
 	df_final['TOT'].replace('--',999,inplace=True)
 	df_final.dropna(inplace=True)
+	df_final['TOT'] = df_final.apply(lambda x: max_score if x['SCORE'] == 'CUT' else x['TOT'], axis=1)
 	df_final.sort_values(by=['Team Name','TOT'],ascending=True,inplace=True)
-	df_final = df_final.groupby('Team Name').head(6)
+	df_final = df_final.groupby('Team Name').head(TOTAL_GOLFERS_SCORED)
+	
 	df_final_two = df_final.groupby('Team Name')['TOT'].sum().reset_index().sort_values(by='TOT',ascending=True)
 	df_final_two['Position'] = df_final_two['TOT'].rank(method='min')
 	df_final_two.sort_values(by='Position',inplace=True)
-	df_final_two['Final Score'] = df_final_two['TOT'] - (6*70)
+	df_final_two['Final Score'] = df_final_two['TOT'] - (TOTAL_GOLFERS_SCORED * round_tracker())
 
 	return render_template("pool-standings.html",df_final=df_final_two)
 
@@ -272,17 +294,18 @@ def index():
 	
 	Dict={title:column for (title,column) in col}
 	df=pd.DataFrame(Dict)
-
+	max_score = df['TOT'].max()
 	df_picks = pd.read_csv(picks_path)
 	df_final = df_picks.merge(df,on='PLAYER',how='left')
 	df_final['TOT'].replace('--',999,inplace=True)
 	df_final.dropna(inplace=True)
+	df_final['TOT'] = df_final.apply(lambda x: max_score if x['SCORE'] == 'CUT' else x['TOT'], axis=1)
 	df_final.sort_values(by=['Team Name','TOT'],ascending=True,inplace=True)
-	df_final = df_final.groupby('Team Name').head(6)
+	df_final = df_final.groupby('Team Name').head(TOTAL_GOLFERS_SCORED)
 	df_final_two = df_final.groupby('Team Name')['TOT'].sum().reset_index().sort_values(by='TOT',ascending=True)
 	df_final_two['Position'] = df_final_two['TOT'].rank(method='min')
 	df_final_two.sort_values(by='Position',inplace=True)
-	df_final_two['Final Score'] = df_final_two['TOT'] - (6*70)
+	df_final_two['Final Score'] = df_final_two['TOT'] - (TOTAL_GOLFERS_SCORED * round_tracker())
 	return render_template("pool-standings.html", df_final=df_final_two)
 
 
