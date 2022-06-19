@@ -166,8 +166,8 @@ def pool_standings():
 	df_final_two['Position'] = df_final_two['TOT'].rank(method='min')
 	df_final_two.sort_values(by='Position',inplace=True)
 	df_final_two['Final Score'] = df_final_two['TOT'] - (TOTAL_GOLFERS_SCORED * round_tracker())
-
-	return render_template("pool-standings.html",df_final=df_final_two)
+	todays_date_tidy = f'Updated as of {datetime.now().strftime("%d/%m/%Y %H:%M:%S")}'
+	return render_template("pool-standings.html",df_final=df_final_two, updated_date = todays_date_tidy)
 
 
 
