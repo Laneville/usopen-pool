@@ -153,7 +153,7 @@ def pool_standings():
 	
 	Dict={title:column for (title,column) in col}
 	df=pd.DataFrame(Dict)
-	max_score = df['TOT'].max()
+	max_score = df['TOT'].max() - 1
 	df_picks = pd.read_csv(picks_path)
 	df_final = df_picks.merge(df,on='PLAYER',how='left')
 	df_final['TOT'].replace('--',999,inplace=True)
@@ -294,7 +294,7 @@ def index():
 	
 	Dict={title:column for (title,column) in col}
 	df=pd.DataFrame(Dict)
-	max_score = df['TOT'].max()
+	max_score = df['TOT'].max() - 1
 	df_picks = pd.read_csv(picks_path)
 	df_final = df_picks.merge(df,on='PLAYER',how='left')
 	df_final['TOT'].replace('--',999,inplace=True)
@@ -308,6 +308,58 @@ def index():
 	df_final_two['Final Score'] = df_final_two['TOT'] - (TOTAL_GOLFERS_SCORED * round_tracker())
 	return render_template("pool-standings.html", df_final=df_final_two)
 
+# Create a route decorator
+@app.route('/live_tracker')
+def live_tracker():
+	url="http://www.espn.com/golf/leaderboard"
+	page = requests.get(url)
+	doc = lh.fromstring(page.content)
+	tr_elements = doc.xpath('//tr')
+	#Create empty list
+	col=[]
+	i=0
+	#For each row, store each first element (header) and an empty list
+	for t in tr_elements[0]:
+		i+=1
+		name=t.text_content()
+		col.append((name,[]))
+	
+	#Since out first row is the header, data is stored on the second row onwards
+	for j in range(1,len(tr_elements)):
+		#T is our j'th row
+		T=tr_elements[j]
+		#i is the index of our column
+		i=0
+		#Iterate through each element of the row
+		for t in T.iterchildren():
+			data=t.text_content() 
+			#Check if row is empty
+			if i>0:
+			#Convert any numerical value to integers
+				try:
+					data=int(data)
+				except:
+					pass
+			#Append the data to the empty list of the i'th column
+			col[i][1].append(data)
+			#Increment i for the next column
+			i+=1
+	
+	Dict={title:column for (title,column) in col}
+	df=pd.DataFrame(Dict)
+	max_score = df['TOT'].max() - 1
+	df_picks = pd.read_csv(picks_path)
+	df_final = df_picks.merge(df,on='PLAYER',how='left')
+	df_final['TOT'].replace('--',999,inplace=True)
+	df_final.dropna(inplace=True)
+	df_final['SCORE'].replace('CUT',df_final[df_final['SCORE'] != 'CUT']['SCORE'].max() + 1,inplace=True)
+	df_final.sort_values(by=['Team Name','SCORE'],ascending=True,inplace=True)
+	df_final = df_final.groupby('Team Name').head(TOTAL_GOLFERS_SCORED)
+	live_stats = df_final.copy()
+	live_stats = live_stats.groupby('Team Name')['SCORE'].sum().reset_index().sort_values(by='SCORE',ascending=True)
+	live_stats['Position'] = live_stats['SCORE'].rank(method='min')
+	live_stats.sort_values(by='Position',inplace=True)
+	return render_template("live-standings.html", live_stats_table = live_stats)
 
 # Create Custom Error Pages
 
